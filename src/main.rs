@@ -29,9 +29,9 @@ use rp_pico::hal;
 // USB Device support
 use usb_device::{class_prelude::*, prelude::*};
 
-use usbd_hid::descriptor::KeyboardReport;
 // USB Human Interface Device (HID) Class support
 use usbd_hid::descriptor::generator_prelude::*;
+use usbd_hid::descriptor::KeyboardReport;
 use usbd_hid::hid_class::HIDClass;
 
 /// The USB Device Driver (shared with the interrupt).
@@ -55,19 +55,11 @@ static mut UART: Option<
     >,
 > = None;
 */
-/// Entry point to our bare-metal application.
-///
-/// The `#[entry]` macro ensures the Cortex-M start-up code calls this function
-/// as soon as all global variables are initialised.
-///
-/// The function configures the RP2040 peripherals, then submits cursor movement
-/// updates periodically.
+
 #[entry]
 fn main() -> ! {
-    // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
 
-    // Set up the watchdog driver - needed by the clock setup code
     let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
 
     // Configure the clocks
@@ -204,5 +196,3 @@ unsafe fn USBCTRL_IRQ() {
     let usb_hid = USB_HID.as_mut().unwrap();
     usb_dev.poll(&mut [usb_hid]);
 }
-
-// End of file

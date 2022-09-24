@@ -12,8 +12,6 @@ embedded-hal = "0.2"
 embedded-time = "0.12"
 panic-halt = "0.2"
 rp-pico = "0.5"
-#usbd-human-interface-device = "0.3"
 usbd-hid = "0.6.0"
 usb-device = "0.2"
 critical-section = "1.1.1"
-#frunk = { version = "0.4", default-features = false }
