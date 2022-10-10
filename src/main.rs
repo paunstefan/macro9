@@ -3,36 +3,21 @@
 #![no_main]
 
 use core::convert::Infallible;
-
 use embedded_hal::digital::v2::InputPin;
-// The macro for our start-up function
-use rp_pico::entry;
-
-// The macro for marking our interrupt functions
-use rp_pico::hal::pac::interrupt;
-
-// Ensure we halt the program on panic (if we don't mention this crate it won't
-// be linked)
 use panic_halt as _;
-
-// Pull in any important traits
+use rp_pico::entry;
+use rp_pico::hal;
+use rp_pico::hal::pac;
+use rp_pico::hal::pac::interrupt;
 use rp_pico::hal::prelude::*;
 
-// A shorter alias for the Peripheral Access Crate, which provides low-level
-// register access
-use rp_pico::hal::pac;
-
-// A shorter alias for the Hardware Abstraction Layer, which provides
-// higher-level drivers.
-use rp_pico::hal;
-
-// USB Device support
 use usb_device::{class_prelude::*, prelude::*};
-
-// USB Human Interface Device (HID) Class support
 use usbd_hid::descriptor::generator_prelude::*;
 use usbd_hid::descriptor::KeyboardReport;
 use usbd_hid::hid_class::HIDClass;
+use usbd_serial::SerialPort;
+
+mod flash;
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -42,6 +27,8 @@ static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 /// The USB Human Interface Device Driver (shared with the interrupt).
 static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
+
+static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
 
 /*
 static mut UART: Option<
@@ -108,6 +95,12 @@ fn main() -> ! {
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet.
         USB_HID = Some(usb_hid);
+    }
+
+    // Set up the USB Communications Class Device driver
+    let serial = SerialPort::new(bus_ref);
+    unsafe {
+        USB_SERIAL = Some(serial);
     }
 
     // Create a USB device with a fake VID and PID
@@ -194,5 +187,20 @@ unsafe fn USBCTRL_IRQ() {
     // Handle USB request
     let usb_dev = USB_DEVICE.as_mut().unwrap();
     let usb_hid = USB_HID.as_mut().unwrap();
-    usb_dev.poll(&mut [usb_hid]);
+    let serial = USB_SERIAL.as_mut().unwrap();
+
+    if usb_dev.poll(&mut [usb_hid, serial]) {
+        let mut buf = [0u8; 64];
+        match serial.read(&mut buf) {
+            Err(_e) => {
+                // Do nothing
+            }
+            Ok(0) => {
+                // Do nothing
+            }
+            Ok(count) => {
+                // TODO: stuff with the data
+            }
+        }
+    }
 }
