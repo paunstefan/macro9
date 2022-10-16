@@ -197,11 +197,11 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
- "critical-section 1.1.1",
  "embedded-hal",
  "embedded-time",
  "panic-halt",
  "rp-pico",
+ "simple_crc",
  "usb-device",
  "usbd-hid",
  "usbd-serial",
@@ -495,6 +495,11 @@ name = "serde"
 version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "728eb6351430bccb993660dfffc5a72f91ccc1295abaa8ce19b27ebe4f75568b"
+
+[[package]]
+name = "simple_crc"
+version = "0.1.0"
+source = "git+https://github.com/paunstefan/simple_crc#49929484904c037ad5736460fb49ba0c6ded2bdb"
 
 [[package]]
 name = "ssmarshal"

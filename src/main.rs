@@ -2,7 +2,8 @@
 #![no_std]
 #![no_main]
 
-use core::convert::Infallible;
+// TODO: Refactor: change static mut to mutexes
+
 use embedded_hal::digital::v2::InputPin;
 use panic_halt as _;
 use rp_pico::entry;
@@ -17,7 +18,9 @@ use usbd_hid::descriptor::KeyboardReport;
 use usbd_hid::hid_class::HIDClass;
 use usbd_serial::SerialPort;
 
+mod config;
 mod flash;
+mod keys;
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -28,6 +31,7 @@ static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 /// The USB Human Interface Device Driver (shared with the interrupt).
 static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
 
+/// The USB Serial Driver (shared with the interrupt).
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
 
 /*
@@ -45,13 +49,11 @@ static mut UART: Option<
 
 #[entry]
 fn main() -> ! {
+    // Initialize START
     let mut pac = pac::Peripherals::take().unwrap();
 
     let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
 
-    // Configure the clocks
-    //
-    // The default is to generate a 125 MHz system clock
     let clocks = hal::clocks::init_clocks_and_plls(
         rp_pico::XOSC_CRYSTAL_FREQ,
         pac.XOSC,
@@ -142,36 +144,29 @@ fn main() -> ! {
         UART = Some(uart);
     }
     */
-    let keys: &[&dyn InputPin<Error = core::convert::Infallible>] =
-        &[&pins.gpio16.into_pull_up_input()];
+
+    // Initialize END
+
+    let keys: &[&dyn InputPin<Error = core::convert::Infallible>; 2] = &[
+        &pins.gpio20.into_pull_up_input(),
+        &pins.gpio21.into_pull_up_input(),
+    ];
 
     loop {
         delay.delay_ms(50);
 
-        let report = get_keys(keys);
-
-        push_keyboard_report(report);
+        let reports = keys::get_keys(keys);
+        reports.into_iter().flatten().for_each(|report| {
+            push_keyboard_report(report);
+        });
     }
-}
-
-fn get_keys(keys: &[&dyn InputPin<Error = Infallible>]) -> KeyboardReport {
-    let mut report = KeyboardReport {
-        modifier: 0,
-        reserved: 0,
-        leds: 0,
-        keycodes: [0x00, 0, 0, 0, 0, 0],
-    };
-    if keys[0].is_low().unwrap() {
-        report.keycodes[0] = 0x04;
-    }
-    report
 }
 
 /// Submit a new keyboard report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
 fn push_keyboard_report(report: KeyboardReport) -> Result<usize, usb_device::UsbError> {
-    critical_section::with(|_| unsafe {
+    cortex_m::interrupt::free(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a HID report
         USB_HID.as_mut().map(|hid| hid.push_input(&report))
