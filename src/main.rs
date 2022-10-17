@@ -185,17 +185,6 @@ unsafe fn USBCTRL_IRQ() {
     let serial = USB_SERIAL.as_mut().unwrap();
 
     if usb_dev.poll(&mut [usb_hid, serial]) {
-        let mut buf = [0u8; 64];
-        match serial.read(&mut buf) {
-            Err(_e) => {
-                // Do nothing
-            }
-            Ok(0) => {
-                // Do nothing
-            }
-            Ok(count) => {
-                // TODO: stuff with the data
-            }
-        }
+        config::process_command(serial);
     }
 }

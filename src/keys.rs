@@ -77,15 +77,17 @@ impl KeypadConfig {
         Some(Key { modifier, keycodes })
     }
 
-    pub fn serialize(&self) -> [u8; 63] {
-        let mut ret = [0; 63];
+    pub fn serialize(&self, buf: &mut [u8]) -> Result<(), ()> {
+        if buf.len() != 63 {
+            return Err(());
+        }
 
         for i in 0..NUM_KEYS {
             let index = i * 7;
-            ret[index..(index + 7)].copy_from_slice(&KeypadConfig::serialize_key(&self.0[i]))
+            buf[index..(index + 7)].copy_from_slice(&KeypadConfig::serialize_key(&self.0[i]))
         }
 
-        ret
+        Ok(())
     }
 
     pub fn deserialize(buf: &[u8]) -> Option<Self> {
