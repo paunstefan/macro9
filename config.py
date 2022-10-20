@@ -24,19 +24,19 @@ class Keypad:
         for k in keys:
             config.append(k.modifiers)
             config += k.keys
-        self.structs = bytes(config)
+        self.structs = config
 
 
 # Change the keys to the HID keycodes you want
-KEY1 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY2 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY3 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY4 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY5 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY6 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY7 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY8 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
-KEY9 = Key(modifiers=0, keys=[0, 0, 0, 0, 0, 0])
+KEY1 = Key(modifiers=0, keys=[4, 0, 0, 0, 0, 0])
+KEY2 = Key(modifiers=0, keys=[5, 0, 0, 0, 0, 0])
+KEY3 = Key(modifiers=0, keys=[6, 0, 0, 0, 0, 0])
+KEY4 = Key(modifiers=0, keys=[7, 0, 0, 0, 0, 0])
+KEY5 = Key(modifiers=0, keys=[8, 0, 0, 0, 0, 0])
+KEY6 = Key(modifiers=0, keys=[9, 0, 0, 0, 0, 0])
+KEY7 = Key(modifiers=0, keys=[10, 0, 0, 0, 0, 0])
+KEY8 = Key(modifiers=0, keys=[11, 0, 0, 0, 0, 0])
+KEY9 = Key(modifiers=0, keys=[12, 0, 0, 0, 0, 0])
 
 
 KEYPAD = Keypad([KEY1, KEY2, KEY3, KEY4, KEY5, KEY6, KEY7, KEY8, KEY9])
@@ -64,8 +64,9 @@ def set_command():
 
     print("Setting")
 
-    request = bytes([0x4D, 0x39, 0x53] + KEYPAD.structs + [0x00])
+    request = [0x4D, 0x39, 0x53] + KEYPAD.structs + [0x00]
     request[66] = calculate_crc(request[0:66])
+    request = bytes(request)
 
     ser.write(request)
     response = ser.read(4)
@@ -88,8 +89,7 @@ def set_command():
 def get_command():
     ser = serial.Serial(SERIAL_PORT)
 
-    request = bytes([0x4D, 0x39, 0x47, 0x00])
-    request[3] = calculate_crc(request[0:3])
+    request = bytes([0x4D, 0x39, 0x47, 0x81])
 
     ser.write(request)
     response = ser.read(67)

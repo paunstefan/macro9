@@ -34,8 +34,7 @@ static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
 /// The USB Serial Driver (shared with the interrupt).
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
 
-/*
-static mut UART: Option<
+pub static mut UART: Option<
     hal::uart::UartPeripheral<
         hal::uart::Enabled,
         pac::UART0,
@@ -45,7 +44,6 @@ static mut UART: Option<
         ),
     >,
 > = None;
-*/
 
 #[entry]
 fn main() -> ! {
@@ -124,7 +122,6 @@ fn main() -> ! {
     let core = pac::CorePeripherals::take().unwrap();
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    /*
     let uart_pins = (
         // UART TX (characters sent from RP2040) on pin 1 (GPIO0)
         pins.gpio16.into_mode::<hal::gpio::FunctionUart>(),
@@ -143,13 +140,19 @@ fn main() -> ! {
         // Note (safety): This is safe as interrupts haven't been started yet
         UART = Some(uart);
     }
-    */
 
     // Initialize END
 
-    let keys: &[&dyn InputPin<Error = core::convert::Infallible>; 2] = &[
-        &pins.gpio20.into_pull_up_input(),
-        &pins.gpio21.into_pull_up_input(),
+    let keys: &[&dyn InputPin<Error = core::convert::Infallible>; 8] = &[
+        &pins.gpio1.into_pull_up_input(),
+        &pins.gpio2.into_pull_up_input(),
+        &pins.gpio4.into_pull_up_input(),
+        &pins.gpio7.into_pull_up_input(),
+        &pins.gpio9.into_pull_up_input(),
+        &pins.gpio13.into_pull_up_input(),
+        &pins.gpio14.into_pull_up_input(),
+        //&pins.gpio17.into_pull_up_input(),
+        &pins.gpio22.into_pull_up_input(),
     ];
 
     loop {
@@ -184,7 +187,18 @@ unsafe fn USBCTRL_IRQ() {
     let usb_hid = USB_HID.as_mut().unwrap();
     let serial = USB_SERIAL.as_mut().unwrap();
 
-    if usb_dev.poll(&mut [usb_hid, serial]) {
-        config::process_command(serial);
+    if usb_dev.poll(&mut [serial, usb_hid]) {
+        let mut buf = [0u8; 67];
+        let rd = serial.read(&mut buf);
+
+        match rd {
+            Ok(0) => {}
+            Err(_) => {}
+            Ok(n) => {
+                cortex_m::interrupt::free(|_| {
+                    config::process_command(serial, &mut buf, n);
+                });
+            }
+        }
     }
 }

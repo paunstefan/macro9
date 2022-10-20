@@ -1,4 +1,4 @@
-use core::{cell::RefCell, convert::Infallible};
+use core::{cell::RefCell, convert::Infallible, fmt::Write};
 
 use cortex_m::interrupt::{self, Mutex};
 use embedded_hal::digital::v2::InputPin;
@@ -7,52 +7,52 @@ use usbd_hid::descriptor::KeyboardReport;
 const NUM_KEYS: usize = 9;
 
 /// Configuration of a single key on the keypad
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Key {
     pub modifier: u8,
     pub keycodes: [u8; 6],
 }
-
+#[derive(Debug)]
 pub struct KeypadConfig([Key; NUM_KEYS]);
 
 /// Configuration for each of the 9 buttons of the keypad
 /// These default values may be changed by the configurator
 pub static KEYS: Mutex<RefCell<KeypadConfig>> = Mutex::new(RefCell::new(KeypadConfig([
     Key {
-        modifier: 0x01,
+        modifier: 0x00,
+        keycodes: [0x04, 0x00, 0x00, 0x00, 0x00, 0x00],
+    },
+    Key {
+        modifier: 0x00,
+        keycodes: [0x05, 0x00, 0x00, 0x00, 0x00, 0x00],
+    },
+    Key {
+        modifier: 0,
         keycodes: [0x06, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
     Key {
-        modifier: 0x01,
-        keycodes: [0x19, 0x00, 0x00, 0x00, 0x00, 0x00],
+        modifier: 0,
+        keycodes: [0x07, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
     Key {
         modifier: 0,
-        keycodes: [0; 6],
+        keycodes: [0x08, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
     Key {
         modifier: 0,
-        keycodes: [0; 6],
+        keycodes: [0x09, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
     Key {
         modifier: 0,
-        keycodes: [0; 6],
+        keycodes: [0x0A, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
     Key {
         modifier: 0,
-        keycodes: [0; 6],
+        keycodes: [0x0B, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
     Key {
         modifier: 0,
-        keycodes: [0; 6],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0; 6],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0; 6],
+        keycodes: [0x0C, 0x00, 0x00, 0x00, 0x00, 0x00],
     },
 ])));
 
@@ -62,6 +62,13 @@ impl KeypadConfig {
 
         ret[0] = key.modifier;
         ret[1..7].copy_from_slice(&key.keycodes[..]);
+
+        unsafe {
+            crate::UART
+                .as_mut()
+                .unwrap()
+                .write_fmt(format_args!("Serializing key: {:?}\n\r", ret));
+        }
 
         ret
     }
@@ -87,10 +94,17 @@ impl KeypadConfig {
             buf[index..(index + 7)].copy_from_slice(&KeypadConfig::serialize_key(&self.0[i]))
         }
 
+        unsafe {
+            crate::UART
+                .as_mut()
+                .unwrap()
+                .write_full_blocking(b"Serialization complete\n\r");
+        }
+
         Ok(())
     }
 
-    pub fn deserialize(buf: &[u8]) -> Option<Self> {
+    pub fn deserialize(buf: &[u8]) -> Option<KeypadConfig> {
         if buf.len() != 63 {
             return None;
         }
@@ -120,8 +134,8 @@ fn new_report() -> KeyboardReport {
     }
 }
 
-pub fn get_keys(keys: &[&dyn InputPin<Error = Infallible>]) -> [Option<KeyboardReport>; 2] {
-    let mut ret = [None; 2];
+pub fn get_keys(keys: &[&dyn InputPin<Error = Infallible>]) -> [Option<KeyboardReport>; 9] {
+    let mut ret = [None; 9];
     let mut pressed = false;
 
     for i in 0..keys.len() {
