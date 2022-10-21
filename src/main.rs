@@ -4,6 +4,8 @@
 
 // TODO: Refactor: change static mut to mutexes
 
+use core::sync::atomic::AtomicBool;
+
 use embedded_hal::digital::v2::InputPin;
 use panic_halt as _;
 use rp_pico::entry;
@@ -33,6 +35,7 @@ static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
 
 /// The USB Serial Driver (shared with the interrupt).
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
+static SERIAL_FLAG: AtomicBool = AtomicBool::new(false);
 
 pub static mut UART: Option<
     hal::uart::UartPeripheral<
@@ -162,6 +165,35 @@ fn main() -> ! {
         reports.into_iter().flatten().for_each(|report| {
             push_keyboard_report(report);
         });
+
+        if SERIAL_FLAG.load(core::sync::atomic::Ordering::Relaxed) {
+            let mut buf = [0u8; 67];
+            let rd = cortex_m::interrupt::free(|_| unsafe {
+                USB_SERIAL.as_mut().unwrap().read(&mut buf)
+            });
+
+            unsafe {
+                use core::fmt::Write;
+
+                crate::UART
+                    .as_mut()
+                    .unwrap()
+                    .write_fmt(format_args!("Read {:?}\n\r", rd));
+            }
+
+            let response = match rd {
+                Ok(0) => None,
+                Ok(n) => config::process_command(&mut buf, n),
+                Err(_) => None,
+            };
+
+            if response.is_some() {
+                cortex_m::interrupt::free(|_| unsafe {
+                    USB_SERIAL.as_mut().unwrap().write(response.unwrap())
+                });
+            }
+            SERIAL_FLAG.store(false, core::sync::atomic::Ordering::Relaxed);
+        }
     }
 }
 
@@ -187,18 +219,7 @@ unsafe fn USBCTRL_IRQ() {
     let usb_hid = USB_HID.as_mut().unwrap();
     let serial = USB_SERIAL.as_mut().unwrap();
 
-    if usb_dev.poll(&mut [serial, usb_hid]) {
-        let mut buf = [0u8; 67];
-        let rd = serial.read(&mut buf);
-
-        match rd {
-            Ok(0) => {}
-            Err(_) => {}
-            Ok(n) => {
-                cortex_m::interrupt::free(|_| {
-                    config::process_command(serial, &mut buf, n);
-                });
-            }
-        }
+    if usb_dev.poll(&mut [usb_hid, serial]) {
+        SERIAL_FLAG.store(true, core::sync::atomic::Ordering::Relaxed);
     }
 }

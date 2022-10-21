@@ -43,7 +43,7 @@ fn calculate_crc(data: &[u8]) -> u8 {
     simple_crc::simple_crc8(data, 0x07, 0x00, false, false, 0x00)
 }
 
-pub fn process_command(serial: &mut SerialPort<hal::usb::UsbBus>, buf: &mut [u8], n: usize) {
+pub fn process_command(buf: &mut [u8], n: usize) -> Option<&[u8]> {
     // let mut buf = [0u8; 67];
     // let rd = serial.read(&mut buf);
 
@@ -69,7 +69,7 @@ pub fn process_command(serial: &mut SerialPort<hal::usb::UsbBus>, buf: &mut [u8]
                 .unwrap()
                 .write_fmt(format_args!("Read {} bytes\n\r", n));
         }
-        return;
+        return None;
     }
 
     match Type::try_from(buf[2]) {
@@ -87,7 +87,7 @@ pub fn process_command(serial: &mut SerialPort<hal::usb::UsbBus>, buf: &mut [u8]
                         .unwrap()
                         .write_full_blocking(b"Request wrong\n\r");
                 }
-                return;
+                return None;
             }
             if process_get(buf).is_ok() {
                 unsafe {
@@ -96,7 +96,7 @@ pub fn process_command(serial: &mut SerialPort<hal::usb::UsbBus>, buf: &mut [u8]
                         .unwrap()
                         .write_full_blocking(b"Writing to serial\n\r");
                 }
-                serial.write(&buf[0..67]);
+                return Some(&buf[0..67]);
                 unsafe {
                     crate::UART
                         .as_mut()
@@ -107,21 +107,22 @@ pub fn process_command(serial: &mut SerialPort<hal::usb::UsbBus>, buf: &mut [u8]
         }
         Ok(Type::SetRequest) => {
             if n != 67 || calculate_crc(&buf[0..66]) != buf[66] {
-                return;
+                return None;
             }
 
             match process_set(&buf[3..66]) {
                 Ok(_) => {
-                    serial.write(&SET_ACK);
+                    return Some(&SET_ACK);
                 }
                 Err(_) => {
-                    serial.write(&SET_NACK);
+                    return Some(&SET_NACK);
                 }
             }
         }
-        _ => return,
+        _ => return None,
     };
     //}
+    return None;
 }
 
 /// Receives a buffer in which the current key config will be written
