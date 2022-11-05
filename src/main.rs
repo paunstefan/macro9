@@ -146,6 +146,20 @@ fn main() -> ! {
 
     // Initialize END
 
+    // Check flash config existence
+    let flag = flash::read_flash(flash::FLASH_OFFSET as u32, 1);
+    if flag[0] == 0x39 {
+        let config = flash::read_flash((flash::FLASH_OFFSET + 1) as u32, 63);
+        let key_struct = keys::KeypadConfig::deserialize(config);
+
+        if let Some(key_struct) = key_struct {
+            // Replace running config
+            cortex_m::interrupt::free(|cs| {
+                (*keys::KEYS.borrow(cs).borrow_mut()).keys = key_struct.keys;
+            });
+        }
+    }
+
     let keys: &[&dyn InputPin<Error = core::convert::Infallible>; 8] = &[
         &pins.gpio1.into_pull_up_input(),
         &pins.gpio2.into_pull_up_input(),
@@ -165,7 +179,7 @@ fn main() -> ! {
         reports.into_iter().flatten().for_each(|report| {
             push_keyboard_report(report);
         });
-
+        /*
         if SERIAL_FLAG.load(core::sync::atomic::Ordering::Relaxed) {
             let mut buf = [0u8; 67];
             let rd = cortex_m::interrupt::free(|_| unsafe {
@@ -178,8 +192,9 @@ fn main() -> ! {
                 crate::UART
                     .as_mut()
                     .unwrap()
-                    .write_fmt(format_args!("Read {:?}\n\r", rd));
+                    .write_fmt(format_args!("Read {:?} {}\n\r", rd, i));
             }
+            i += 1;
 
             let response = match rd {
                 Ok(0) => None,
@@ -194,6 +209,7 @@ fn main() -> ! {
             }
             SERIAL_FLAG.store(false, core::sync::atomic::Ordering::Relaxed);
         }
+        */
     }
 }
 
@@ -209,6 +225,44 @@ fn push_keyboard_report(report: KeyboardReport) -> Result<usize, usb_device::Usb
     .unwrap()
 }
 
+/// Reads into buffer until an error (like WouldBlock) is encountered
+/// If the first read is successful, it continues reading into the buffer
+/// If the first read returns WouldBlock, it returns Ok(0)
+///
+/// Because function might be called too fast, it retries a number of times
+/// to read a packet
+fn read_full_packet(
+    port: &mut SerialPort<hal::usb::UsbBus>,
+    buf: &mut [u8],
+) -> Result<usize, UsbError> {
+    let mut index = 0;
+    let mut retries = 0;
+    loop {
+        let rd = cortex_m::interrupt::free(|_| port.read(&mut buf[index..]));
+
+        // unsafe {
+        //     use core::fmt::Write;
+        //     if rd.is_ok() || index != 0 {
+        //         crate::UART
+        //             .as_mut()
+        //             .unwrap()
+        //             .write_fmt(format_args!("Readall {:?}\n\r", rd));
+        //     }
+        // }
+
+        match rd {
+            Ok(n) => index += n,
+            Err(usb_device::UsbError::WouldBlock) => {
+                if index == 0 || index == 4 || index == 67 || retries > 32 {
+                    return Ok(index);
+                }
+            }
+            Err(e) => return Err(e),
+        };
+        retries += 1;
+    }
+}
+
 /// This function is called whenever the USB Hardware generates an Interrupt
 /// Request.
 #[allow(non_snake_case)]
@@ -220,6 +274,33 @@ unsafe fn USBCTRL_IRQ() {
     let serial = USB_SERIAL.as_mut().unwrap();
 
     if usb_dev.poll(&mut [usb_hid, serial]) {
-        SERIAL_FLAG.store(true, core::sync::atomic::Ordering::Relaxed);
+        //SERIAL_FLAG.store(true, core::sync::atomic::Ordering::Relaxed);
+
+        let mut buf = [0u8; 67];
+        //let rd = cortex_m::interrupt::free(|_| read_all(serial, &mut buf));
+        let rd = read_full_packet(serial, &mut buf);
+        //let rd = cortex_m::interrupt::free(|_| serial.read(&mut buf));
+
+        // unsafe {
+        //     use core::fmt::Write;
+        //     if let Ok(n) = rd {
+        //         if n != 0 {
+        //             crate::UART
+        //                 .as_mut()
+        //                 .unwrap()
+        //                 .write_fmt(format_args!("Read {:?}\n\r", rd));
+        //         }
+        //     }
+        // }
+
+        let response = match rd {
+            Ok(0) => None,
+            Ok(n) => config::process_command(&mut buf, n),
+            Err(_) => None,
+        };
+
+        if response.is_some() {
+            cortex_m::interrupt::free(|_| serial.write(response.unwrap()));
+        }
     }
 }

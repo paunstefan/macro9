@@ -13,48 +13,52 @@ pub struct Key {
     pub keycodes: [u8; 6],
 }
 #[derive(Debug)]
-pub struct KeypadConfig([Key; NUM_KEYS]);
+pub struct KeypadConfig {
+    pub keys: [Key; NUM_KEYS],
+}
 
 /// Configuration for each of the 9 buttons of the keypad
 /// These default values may be changed by the configurator
-pub static KEYS: Mutex<RefCell<KeypadConfig>> = Mutex::new(RefCell::new(KeypadConfig([
-    Key {
-        modifier: 0x00,
-        keycodes: [0x04, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0x00,
-        keycodes: [0x05, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x06, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x07, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x08, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x09, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x0A, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x0B, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-    Key {
-        modifier: 0,
-        keycodes: [0x0C, 0x00, 0x00, 0x00, 0x00, 0x00],
-    },
-])));
+pub static KEYS: Mutex<RefCell<KeypadConfig>> = Mutex::new(RefCell::new(KeypadConfig {
+    keys: [
+        Key {
+            modifier: 0x00,
+            keycodes: [0x04, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0x00,
+            keycodes: [0x05, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x06, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x07, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x08, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x09, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x0A, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x0B, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+        Key {
+            modifier: 0,
+            keycodes: [0x0C, 0x00, 0x00, 0x00, 0x00, 0x00],
+        },
+    ],
+}));
 
 impl KeypadConfig {
     fn serialize_key(key: &Key) -> [u8; 7] {
@@ -91,7 +95,7 @@ impl KeypadConfig {
 
         for i in 0..NUM_KEYS {
             let index = i * 7;
-            buf[index..(index + 7)].copy_from_slice(&KeypadConfig::serialize_key(&self.0[i]))
+            buf[index..(index + 7)].copy_from_slice(&KeypadConfig::serialize_key(&self.keys[i]))
         }
 
         unsafe {
@@ -121,7 +125,7 @@ impl KeypadConfig {
             keys[i] = key;
         }
 
-        Some(KeypadConfig(keys))
+        Some(KeypadConfig { keys })
     }
 }
 
@@ -142,7 +146,7 @@ pub fn get_keys(keys: &[&dyn InputPin<Error = Infallible>]) -> [Option<KeyboardR
         if keys[i].is_low().unwrap() {
             let mut report = new_report();
             interrupt::free(|cs| {
-                let buttons = &KEYS.borrow(cs).borrow().0;
+                let buttons = &KEYS.borrow(cs).borrow().keys;
                 report.modifier = buttons[i].modifier;
                 report.keycodes = buttons[i].keycodes;
             });

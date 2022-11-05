@@ -1,3 +1,5 @@
+use crate::flash;
+use cortex_m::interrupt;
 use rp_pico::hal;
 use usbd_serial::SerialPort;
 
@@ -144,12 +146,23 @@ fn process_get(buf: &mut [u8]) -> Result<(), ()> {
 
 /// Receives a buffer with the key config to be applied to the device
 fn process_set(buf: &[u8]) -> Result<(), ()> {
-    let key_struct = match KeypadConfig::deserialize(&buf) {
+    let key_struct = match KeypadConfig::deserialize(buf) {
         Some(k) => k,
         None => {
             return Err(());
         }
     };
+
+    // Replace running config
+    interrupt::free(|cs| {
+        (*KEYS.borrow(cs).borrow_mut()).keys = key_struct.keys;
+    });
+
+    // Write config to flash
+    let mut flash_buffer = [0; 256];
+    flash_buffer[0] = 0x39; // Config present flag (magic number)
+    flash_buffer[1..64].copy_from_slice(buf);
+    flash::write_flash(flash::FLASH_OFFSET as u32, &flash_buffer);
 
     unsafe {
         use core::fmt::Write;
@@ -157,7 +170,7 @@ fn process_set(buf: &[u8]) -> Result<(), ()> {
         crate::UART
             .as_mut()
             .unwrap()
-            .write_fmt(format_args!("Deserialized config {:?}\n\r", key_struct));
+            .write_fmt(format_args!("Deserialized config and wrote flash\n\r",));
     }
 
     Ok(())

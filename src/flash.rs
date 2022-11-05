@@ -9,13 +9,18 @@ const FLASH_SIZE: usize = 2048 * 1024;
 const FLASH_SECTOR_SIZE: usize = 4096;
 const FLASH_PAGE_SIZE: usize = 256;
 const FLASH_BLOCK_SIZE: u32 = 65536;
-const FLASH_OFFSET: usize = FLASH_SIZE - FLASH_SECTOR_SIZE;
-const FLASH_WR: *mut u8 = (FLASH_START + FLASH_OFFSET) as *mut u8;
 
 // Flash chip commands
 const SECTOR_ERASE: u8 = 0x20; // Tested and works with W25Q16JV flash chip
 const BLOCK32_ERASE: u8 = 0x52;
 const BLOCK64_ERASE: u8 = 0xD8;
+
+// Address where MACRO9 flash config starts
+// First byte tells you if the config should be loaded
+pub const FLASH_OFFSET: usize = FLASH_SIZE - FLASH_SECTOR_SIZE;
+const FLASH_WR: *mut u8 = (FLASH_START + FLASH_OFFSET) as *mut u8;
+
+const CONFIG_SIZE: usize = 64;
 
 /// Write slice data to flash.
 ///
@@ -23,7 +28,7 @@ const BLOCK64_ERASE: u8 = 0xD8;
 /// Address must be aligned to 4096 bytes.
 #[inline(never)]
 #[link_section = ".data.ram_code"]
-fn write_flash(addr: u32, data: &[u8]) {
+pub fn write_flash(addr: u32, data: &[u8]) {
     let size = data.len();
     assert!(addr as usize + size <= FLASH_SIZE);
     assert!(addr as usize & (FLASH_SECTOR_SIZE - 1) == 0);
@@ -44,7 +49,8 @@ fn write_flash(addr: u32, data: &[u8]) {
 /// Read a slice from flash
 ///
 /// Returned slice may be changed if you rewrite the flash at that address
-fn read_flash(addr: usize, size: usize) -> &'static [u8] {
+pub fn read_flash(addr: u32, size: usize) -> &'static [u8] {
+    let addr = addr as usize;
     assert!(addr + size <= FLASH_SIZE);
 
     let addr = (FLASH_START + addr) as *mut u8;

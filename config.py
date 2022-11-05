@@ -35,7 +35,7 @@ KEY4 = Key(modifiers=0, keys=[7, 0, 0, 0, 0, 0])
 KEY5 = Key(modifiers=0, keys=[8, 0, 0, 0, 0, 0])
 KEY6 = Key(modifiers=0, keys=[9, 0, 0, 0, 0, 0])
 KEY7 = Key(modifiers=0, keys=[10, 0, 0, 0, 0, 0])
-KEY8 = Key(modifiers=0, keys=[11, 0, 0, 0, 0, 0])
+KEY8 = Key(modifiers=0, keys=[4, 0, 0, 0, 0, 0])
 KEY9 = Key(modifiers=0, keys=[12, 0, 0, 0, 0, 0])
 
 
@@ -71,8 +71,8 @@ def set_command():
     ser.write(request)
     response = ser.read(4)
 
-    crc = calculate_crc(response[:4])
-    if crc != response[4]:
+    crc = calculate_crc(response[:3])
+    if crc != response[3]:
         print("Invalid CRC")
         return
 
