@@ -2,10 +2,6 @@
 #![no_std]
 #![no_main]
 
-// TODO: Refactor: change static mut to mutexes
-
-use core::sync::atomic::AtomicBool;
-
 use embedded_hal::digital::v2::InputPin;
 use panic_halt as _;
 use rp_pico::entry;
@@ -35,18 +31,6 @@ static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
 
 /// The USB Serial Driver (shared with the interrupt).
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
-static SERIAL_FLAG: AtomicBool = AtomicBool::new(false);
-
-pub static mut UART: Option<
-    hal::uart::UartPeripheral<
-        hal::uart::Enabled,
-        pac::UART0,
-        (
-            hal::gpio::Pin<hal::gpio::bank0::Gpio16, hal::gpio::Function<hal::gpio::Uart>>,
-            hal::gpio::Pin<hal::gpio::bank0::Gpio17, hal::gpio::Function<hal::gpio::Uart>>,
-        ),
-    >,
-> = None;
 
 #[entry]
 fn main() -> ! {
@@ -125,25 +109,6 @@ fn main() -> ! {
     let core = pac::CorePeripherals::take().unwrap();
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    let uart_pins = (
-        // UART TX (characters sent from RP2040) on pin 1 (GPIO0)
-        pins.gpio16.into_mode::<hal::gpio::FunctionUart>(),
-        // UART RX (characters received by RP2040) on pin 2 (GPIO1)
-        pins.gpio17.into_mode::<hal::gpio::FunctionUart>(),
-    );
-
-    let uart = hal::uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
-        .enable(
-            hal::uart::common_configs::_9600_8_N_1,
-            clocks.peripheral_clock.freq(),
-        )
-        .unwrap();
-    uart.write_full_blocking(b"UART works\n\r");
-    unsafe {
-        // Note (safety): This is safe as interrupts haven't been started yet
-        UART = Some(uart);
-    }
-
     // Initialize END
 
     // Check flash config existence
@@ -159,57 +124,25 @@ fn main() -> ! {
             });
         }
     }
-
-    let keys: &[&dyn InputPin<Error = core::convert::Infallible>; 8] = &[
-        &pins.gpio1.into_pull_up_input(),
+    let keys: &[&dyn InputPin<Error = core::convert::Infallible>; 9] = &[
         &pins.gpio2.into_pull_up_input(),
+        &pins.gpio1.into_pull_up_input(),
         &pins.gpio4.into_pull_up_input(),
-        &pins.gpio7.into_pull_up_input(),
         &pins.gpio9.into_pull_up_input(),
+        &pins.gpio7.into_pull_up_input(),
+        &pins.gpio22.into_pull_up_input(),
         &pins.gpio13.into_pull_up_input(),
         &pins.gpio14.into_pull_up_input(),
-        //&pins.gpio17.into_pull_up_input(),
-        &pins.gpio22.into_pull_up_input(),
+        &pins.gpio17.into_pull_up_input(),
     ];
 
     loop {
-        delay.delay_ms(50);
+        delay.delay_ms(30);
 
         let reports = keys::get_keys(keys);
         reports.into_iter().flatten().for_each(|report| {
             push_keyboard_report(report);
         });
-        /*
-        if SERIAL_FLAG.load(core::sync::atomic::Ordering::Relaxed) {
-            let mut buf = [0u8; 67];
-            let rd = cortex_m::interrupt::free(|_| unsafe {
-                USB_SERIAL.as_mut().unwrap().read(&mut buf)
-            });
-
-            unsafe {
-                use core::fmt::Write;
-
-                crate::UART
-                    .as_mut()
-                    .unwrap()
-                    .write_fmt(format_args!("Read {:?} {}\n\r", rd, i));
-            }
-            i += 1;
-
-            let response = match rd {
-                Ok(0) => None,
-                Ok(n) => config::process_command(&mut buf, n),
-                Err(_) => None,
-            };
-
-            if response.is_some() {
-                cortex_m::interrupt::free(|_| unsafe {
-                    USB_SERIAL.as_mut().unwrap().write(response.unwrap())
-                });
-            }
-            SERIAL_FLAG.store(false, core::sync::atomic::Ordering::Relaxed);
-        }
-        */
     }
 }
 
@@ -238,17 +171,7 @@ fn read_full_packet(
     let mut index = 0;
     let mut retries = 0;
     loop {
-        let rd = cortex_m::interrupt::free(|_| port.read(&mut buf[index..]));
-
-        // unsafe {
-        //     use core::fmt::Write;
-        //     if rd.is_ok() || index != 0 {
-        //         crate::UART
-        //             .as_mut()
-        //             .unwrap()
-        //             .write_fmt(format_args!("Readall {:?}\n\r", rd));
-        //     }
-        // }
+        let rd = port.read(&mut buf[index..]);
 
         match rd {
             Ok(n) => index += n,
@@ -265,7 +188,7 @@ fn read_full_packet(
 
 /// This function is called whenever the USB Hardware generates an Interrupt
 /// Request.
-#[allow(non_snake_case)]
+#[allow(non_snake_case, unused_must_use)]
 #[interrupt]
 unsafe fn USBCTRL_IRQ() {
     // Handle USB request
@@ -274,24 +197,8 @@ unsafe fn USBCTRL_IRQ() {
     let serial = USB_SERIAL.as_mut().unwrap();
 
     if usb_dev.poll(&mut [usb_hid, serial]) {
-        //SERIAL_FLAG.store(true, core::sync::atomic::Ordering::Relaxed);
-
         let mut buf = [0u8; 67];
-        //let rd = cortex_m::interrupt::free(|_| read_all(serial, &mut buf));
         let rd = read_full_packet(serial, &mut buf);
-        //let rd = cortex_m::interrupt::free(|_| serial.read(&mut buf));
-
-        // unsafe {
-        //     use core::fmt::Write;
-        //     if let Ok(n) = rd {
-        //         if n != 0 {
-        //             crate::UART
-        //                 .as_mut()
-        //                 .unwrap()
-        //                 .write_fmt(format_args!("Read {:?}\n\r", rd));
-        //         }
-        //     }
-        // }
 
         let response = match rd {
             Ok(0) => None,
@@ -299,8 +206,8 @@ unsafe fn USBCTRL_IRQ() {
             Err(_) => None,
         };
 
-        if response.is_some() {
-            cortex_m::interrupt::free(|_| serial.write(response.unwrap()));
+        if let Some(response) = response {
+            serial.write(response);
         }
     }
 }

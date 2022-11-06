@@ -1,15 +1,10 @@
 use crate::flash;
 use cortex_m::interrupt;
-use rp_pico::hal;
-use usbd_serial::SerialPort;
 
 use crate::keys::{KeypadConfig, KEYS};
 
-const CONFIG_SIZE: usize = 63;
-const PACKET_START_SIZE: usize = 2;
-const CRC_SIZE: usize = 1;
-const TYPES_SIZE: usize = 1;
-const PACKET_SIZE: usize = 67;
+const CONFIG_PACKET_SIZE: usize = 67;
+const REQUEST_PACKET_SIZE: usize = 4;
 
 const PACKET_START: [u8; 2] = [0x4D, 0x39]; // M9
 
@@ -46,69 +41,21 @@ fn calculate_crc(data: &[u8]) -> u8 {
 }
 
 pub fn process_command(buf: &mut [u8], n: usize) -> Option<&[u8]> {
-    // let mut buf = [0u8; 67];
-    // let rd = serial.read(&mut buf);
-
-    // // ISSUE: serial read does not work without the UART print here
-    // // with it here, it works sometimes
-
-    // unsafe {
-    //     use core::fmt::Write;
-
-    //     crate::UART
-    //         .as_mut()
-    //         .unwrap()
-    //         .write_fmt(format_args!("Read {:?}\n\r", rd));
-    // }
-
-    //if let Ok(n) = rd {
-    if n < 3 && buf[0..2] != PACKET_START {
-        unsafe {
-            use core::fmt::Write;
-
-            crate::UART
-                .as_mut()
-                .unwrap()
-                .write_fmt(format_args!("Read {} bytes\n\r", n));
-        }
+    if n < REQUEST_PACKET_SIZE && buf[0..2] != PACKET_START {
         return None;
     }
 
     match Type::try_from(buf[2]) {
         Ok(Type::GetRequest) => {
-            unsafe {
-                crate::UART
-                    .as_mut()
-                    .unwrap()
-                    .write_full_blocking(b"GET request received\n\r");
-            }
-            if n != 4 || calculate_crc(&buf[0..3]) != buf[3] {
-                unsafe {
-                    crate::UART
-                        .as_mut()
-                        .unwrap()
-                        .write_full_blocking(b"Request wrong\n\r");
-                }
+            if n != REQUEST_PACKET_SIZE || calculate_crc(&buf[0..3]) != buf[3] {
                 return None;
             }
             if process_get(buf).is_ok() {
-                unsafe {
-                    crate::UART
-                        .as_mut()
-                        .unwrap()
-                        .write_full_blocking(b"Writing to serial\n\r");
-                }
-                return Some(&buf[0..67]);
-                unsafe {
-                    crate::UART
-                        .as_mut()
-                        .unwrap()
-                        .write_full_blocking(b"Write complete\n\r");
-                }
+                return Some(&buf[0..CONFIG_PACKET_SIZE]);
             }
         }
         Ok(Type::SetRequest) => {
-            if n != 67 || calculate_crc(&buf[0..66]) != buf[66] {
+            if n != CONFIG_PACKET_SIZE || calculate_crc(&buf[0..66]) != buf[66] {
                 return None;
             }
 
@@ -123,8 +70,8 @@ pub fn process_command(buf: &mut [u8], n: usize) -> Option<&[u8]> {
         }
         _ => return None,
     };
-    //}
-    return None;
+
+    None
 }
 
 /// Receives a buffer in which the current key config will be written
@@ -134,12 +81,6 @@ fn process_get(buf: &mut [u8]) -> Result<(), ()> {
     buf[0..2].copy_from_slice(&PACKET_START);
     buf[2] = 0x52;
     buf[66] = calculate_crc(&buf[0..66]);
-    unsafe {
-        crate::UART
-            .as_mut()
-            .unwrap()
-            .write_full_blocking(b"Got the config and built the packet\n\r");
-    }
 
     Ok(())
 }
@@ -164,25 +105,5 @@ fn process_set(buf: &[u8]) -> Result<(), ()> {
     flash_buffer[1..64].copy_from_slice(buf);
     flash::write_flash(flash::FLASH_OFFSET as u32, &flash_buffer);
 
-    unsafe {
-        use core::fmt::Write;
-
-        crate::UART
-            .as_mut()
-            .unwrap()
-            .write_fmt(format_args!("Deserialized config and wrote flash\n\r",));
-    }
-
     Ok(())
 }
-
-// pub fn process_command(serial: &mut SerialPort<hal::usb::UsbBus>) {
-//     let mut buf = [0u8; 4];
-//     if let Ok(4) = serial.read(&mut buf) {
-//         if buf == [b'P', b'I', b'N', b'G'] {
-//             serial.write(b"PONG");
-//         } else {
-//             serial.write(b"Wrong command");
-//         }
-//     }
-// }

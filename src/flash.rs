@@ -12,15 +12,13 @@ const FLASH_BLOCK_SIZE: u32 = 65536;
 
 // Flash chip commands
 const SECTOR_ERASE: u8 = 0x20; // Tested and works with W25Q16JV flash chip
-const BLOCK32_ERASE: u8 = 0x52;
-const BLOCK64_ERASE: u8 = 0xD8;
+
+//const BLOCK32_ERASE: u8 = 0x52;
+//const BLOCK64_ERASE: u8 = 0xD8;
 
 // Address where MACRO9 flash config starts
 // First byte tells you if the config should be loaded
 pub const FLASH_OFFSET: usize = FLASH_SIZE - FLASH_SECTOR_SIZE;
-const FLASH_WR: *mut u8 = (FLASH_START + FLASH_OFFSET) as *mut u8;
-
-const CONFIG_SIZE: usize = 64;
 
 /// Write slice data to flash.
 ///
@@ -54,7 +52,6 @@ pub fn read_flash(addr: u32, size: usize) -> &'static [u8] {
     assert!(addr + size <= FLASH_SIZE);
 
     let addr = (FLASH_START + addr) as *mut u8;
-    let data = cortex_m::interrupt::free(|_| unsafe { core::slice::from_raw_parts(addr, size) });
 
-    data
+    cortex_m::interrupt::free(|_| unsafe { core::slice::from_raw_parts(addr, size) })
 }

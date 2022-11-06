@@ -14,6 +14,8 @@ and any combination of modifier keys (CTRL, SHIFT, ALT, META).
 To be able to be configured, the MACRO9 opens an USB serial port, in addition to the
 USB HID interface. The communication is done using a few simple commands.
 
+The config is saved in the Pico on-board flash memory so it will persist after a power cycle.
+
 ### Configuration protocol
 
 Key config structure:

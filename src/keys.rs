@@ -1,4 +1,4 @@
-use core::{cell::RefCell, convert::Infallible, fmt::Write};
+use core::{cell::RefCell, convert::Infallible};
 
 use cortex_m::interrupt::{self, Mutex};
 use embedded_hal::digital::v2::InputPin;
@@ -67,13 +67,6 @@ impl KeypadConfig {
         ret[0] = key.modifier;
         ret[1..7].copy_from_slice(&key.keycodes[..]);
 
-        unsafe {
-            crate::UART
-                .as_mut()
-                .unwrap()
-                .write_fmt(format_args!("Serializing key: {:?}\n\r", ret));
-        }
-
         ret
     }
 
@@ -98,16 +91,10 @@ impl KeypadConfig {
             buf[index..(index + 7)].copy_from_slice(&KeypadConfig::serialize_key(&self.keys[i]))
         }
 
-        unsafe {
-            crate::UART
-                .as_mut()
-                .unwrap()
-                .write_full_blocking(b"Serialization complete\n\r");
-        }
-
         Ok(())
     }
 
+    #[allow(clippy::needless_range_loop)]
     pub fn deserialize(buf: &[u8]) -> Option<KeypadConfig> {
         if buf.len() != 63 {
             return None;
@@ -161,14 +148,3 @@ pub fn get_keys(keys: &[&dyn InputPin<Error = Infallible>]) -> [Option<KeyboardR
 
     ret
 }
-
-// #[test]
-// fn serialize_key() {
-//     let key = Key {
-//         modifier: 0x01,
-//         keycodes: [0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B],
-//     };
-
-//     let expected: [u8; 7] = [0x01, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B];
-//     assert_eq!(expected, KeypadConfig::serialize_key(&key));
-// }
