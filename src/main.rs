@@ -91,10 +91,9 @@ fn main() -> ! {
     }
 
     // Create a USB device with a fake VID and PID
-    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27da))
+    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27db))
         .manufacturer("PWN")
         .product("MACRO9")
-        .serial_number("TEST")
         .device_class(0)
         .build();
     unsafe {
