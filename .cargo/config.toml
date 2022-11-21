@@ -16,7 +16,7 @@ rustflags = [
   # "-Z", "trap-unreachable=no",
   "-C", "inline-threshold=5",
   "-C", "no-vectorize-loops",
-  #"-C", "link-arg=-Map=/tmp/macro9.map",
+  #"-C", "link-arg=-Tdefmt.x",
 ]
 
 

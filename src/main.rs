@@ -77,8 +77,16 @@ fn main() -> ! {
     // reference exists!
     let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
 
-    // Set up the USB HID Class Device driver, providing Mouse Reports
-    let usb_hid = HIDClass::new(bus_ref, KeyboardReport::desc(), 60);
+    // Set up the USB HID Class Device driver, providing Keyboard Reports
+    // let settings = usbd_hid::hid_class::HidClassSettings {
+    //     subclass: usbd_hid::hid_class::HidSubClass::NoSubClass,
+    //     config: usbd_hid::hid_class::ProtocolModeConfig::ForceBoot,
+    //     protocol: usbd_hid::hid_class::HidProtocol::Generic,
+    //     locale: usbd_hid::hid_class::HidCountryCode::NotSupported,
+    // };
+
+    // let usb_hid = HIDClass::new_with_settings(bus_ref, KeyboardReport::desc(), 30, settings);
+    let usb_hid = HIDClass::new(bus_ref, KeyboardReport::desc(), 50);
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet.
         USB_HID = Some(usb_hid);
@@ -175,7 +183,7 @@ fn read_full_packet(
         match rd {
             Ok(n) => index += n,
             Err(usb_device::UsbError::WouldBlock) => {
-                if index == 0 || index == 4 || index == 67 || retries > 32 {
+                if index == 0 || index == 4 || index == 67 || retries > 256 {
                     return Ok(index);
                 }
             }
@@ -208,5 +216,11 @@ unsafe fn USBCTRL_IRQ() {
         if let Some(response) = response {
             serial.write(response);
         }
+
+        // If any *_LOCK key is pressed on another keyboard,
+        // the OS will send a report to set the LEDs
+        // if not recevied here, it will freeze the device
+        let mut throwaway_buf = [0; 64];
+        let _ = usb_hid.pull_raw_output(&mut throwaway_buf);
     }
 }
